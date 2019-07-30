@@ -1,0 +1,278 @@
+import sys
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from Assessment3GUIv2 import *
+from keyboardWidget import *
+from random import randint
+import csv
+import os
+from os import listdir
+import statistics
+import pandas as pd
+import matplotlib.pyplot as plt
+
+app = QApplication(sys.argv)
+window = QMainWindow()
+ui = Ui_MainWindow()
+ui.setupUi(window)
+
+# select colours for experiment. Choose from QT colours
+expColours=['red','blue','green','yellow']
+
+# Determine number of trials
+trialNum = 20
+
+# creates a folder for clr results
+newpath = 'indivResults'+str(len(expColours))+'clrs'+ str(trialNum)+'trials'
+if not os.path.exists(newpath):
+    os.makedirs(newpath)
+clResultFolder = listdir(newpath)  # list out all the files in the clr results folder
+partNum = 1  # number of existing csv files
+for i in clResultFolder:
+    if i[-1] == 'v':
+        partNum += 1
+
+listHeader1 = [['Participant No.', 'Name', 'Email', 'Gender', 'Age', 'Education Level', 'No. of Colours', 'No. of Trials']]
+listHeader2 = [['Word', 'Word-Colour', 'Stroop Congruency', 'Response Time']]
+
+# If the results summary file does not exist yet, create results csv file and write headers.
+sumfile = 'summaryResults'+str(len(expColours))+'clrs'+ str(trialNum)+'trials.csv'
+if os.path.exists(sumfile) == False:
+    with open(sumfile, 'w+') as output:
+        writeSummary = csv.writer(output, lineterminator='\n')
+        writeSummary.writerows([['Participant Number','aveConSpd','aveInconSpd', 'stroopScore']])
+
+# Page Navigation
+def goPg(page):
+    ui.exp1All.setCurrentIndex(page)
+
+# Welcome page animation
+window.animateCount= 0
+animateList=[ui.ss, ui.tt, ui.rr,ui.OO,ui.oo,ui.pp,ui.task]
+def animate():  # create timer
+    animateList[window.animateCount].show()
+    if window.animateCount <6:
+        window.animateCount += 1
+    else: animTimer.stop()
+animTimer = QTimer()
+animTimer.timeout.connect(animate)
+animTimer.start(500)
+
+# Set up instructions page
+instrTxt=ui.instrTxt.text()
+for i in expColours:
+    instrTxt= instrTxt +"'" +i[0] + "'  for " + i + '﻿<br/> <br/>'
+ui.instrTxt.setText(instrTxt)
+
+# Demographics Information page set-up
+def checkErrors():
+    errorCount = 0
+    if ui.txtName.text() == "":
+        errorCount += 1
+        ui.nameE.setText("Please input your name before clicking submit")
+        ui.nameE.show()
+    else:
+        ui.nameE.hide()
+    if ui.emailBox.text() == "":
+        errorCount += 1
+        ui.emailE.setText("Please input your email before clicking submit")
+        ui.emailE.show()
+    if ui.emailBox.text().find('@') == -1:
+        errorCount += 1
+        ui.emailE.setText("Please input a proper email address")
+        ui.emailE.show()
+    else:
+        ui.emailE.hide()
+    if ui.maleBtn.isChecked() == False and ui.femaleBtn.isChecked() == False:
+        errorCount += 1
+        ui.genderE.setText("Please input your gender before clicking submit")
+        ui.genderE.show()
+    else:
+        ui.genderE.hide()
+    if ui.ageBox.text() == '0':
+        errorCount += 1
+        ui.ageE.setText("Please input your age before clicking submit")
+        ui.ageE.show()
+    elif int(ui.ageBox.text()) < 18:
+        errorCount += 1
+        ui.ageE.setText("Sorry, you are below the minimum age required to participate in this study.")
+        ui.ageE.show()
+    else:
+        ui.ageE.hide()
+    if ui.eduBox.currentIndex() == 0:
+        errorCount += 1
+        ui.eduE.setText("Please select your education level before clicking submit")
+        ui.eduE.show()
+    else:
+        ui.eduE.hide()
+    if errorCount == 0:
+        window.name = ui.txtName.text()
+        email = ui.emailBox.text()
+        if ui.maleBtn.isChecked() == True:
+            gender = 'Male'
+        else:
+            gender = 'Female'
+        age = ui.ageBox.text()
+        edu = ui.eduBox.currentText()
+        combinedList = [[partNum, window.name, email, gender, age, edu, len(expColours), trialNum], []]
+        window.csvfile = newpath+'/' + str(partNum) + window.name + ".csv"
+        with open(window.csvfile, "w+") as output:
+            writerDemog = csv.writer(output, lineterminator='\n')
+            writerDemog.writerows(listHeader1)
+            writerDemog.writerows(combinedList)
+            writerDemog.writerows(listHeader2)
+        goPg(3)
+
+#------SET UP MAIN EXP ------ #
+wd=[]
+cl=[]
+stCl=[]
+keyPrs=[]
+responseTime=[]
+conSpeed=[]
+inconSpeed=[]
+
+
+# create experiment timer
+def counting():
+    window.counter += 1
+pgTimer = QTimer()
+pgTimer.timeout.connect(counting)
+
+# create colour changing capability
+def setColour(colour):
+    colourLabel=ui.exp1Start
+    colourPallete=colourLabel.palette()
+    colourPallete.setColor(QPalette.WindowText,QColor(colour))
+    colourLabel.setPalette(colourPallete)
+
+def showStroop():
+    #Select Stroop word at Random
+    rdmWd = randint(0, len(expColours)-1)
+    wd.append(expColours[rdmWd])
+    ui.exp1Start.setText(expColours[rdmWd])
+    rdmClr = randint(0, len(expColours)-1)
+    setColour(expColours[rdmClr])
+    cl.append(expColours[rdmClr])
+
+    # Determine if Actual Word Vs Colour of Word matches
+    if wd[-1]==cl[-1]:
+        stCl.append('congruent')
+    else: stCl.append('incongruent')
+
+    window.counter = 0
+    pgTimer.start(1)
+
+def exp1Complete():
+    goPg(5)
+    aveConSpd = statistics.mean(conSpeed)
+    aveInconSpd = statistics.mean(inconSpeed)
+    stroopScore=aveInconSpd-aveConSpd
+    completeData=[],['Ave Congruent Spd', 'Ave Incongruent Spd','Stroop Score'],[aveConSpd,aveInconSpd,stroopScore]
+
+    # Enter data into participant data file
+    with open(window.csvfile, "a") as output:
+        writerDemog = csv.writer(output, lineterminator='\n')
+        writerDemog.writerows(completeData)
+
+    # Enter data into summary file
+    with open(sumfile, "a") as output:
+        writeSum = csv.writer(output, lineterminator='\n')
+        writeSum.writerows([[partNum,aveConSpd,aveInconSpd, stroopScore]])
+
+    # Find sample average results
+    df = pd.read_csv(sumfile)
+    sampleAveCon = df.aveConSpd.mean()
+    sampleAveIncon = df.aveInconSpd.mean()
+    sampleStroopScore=df.stroopScore.mean()
+    sampleStroopValues=df.stroopScore.tolist()
+
+    # Display Participant Results
+    ui.partNumShow.setText(str(partNum))
+    ui.conRShow.setText(str(int(aveConSpd))+'ms')
+    ui.inconRShow.setText(str(int(aveInconSpd))+'ms')
+    ui.stroopRShow.setText(str(int(stroopScore)))
+
+    # Display sample's average results
+    if partNum>1:
+        ui.popConShow.setText(str(int(sampleAveCon))+'ms')
+        ui.popInconShow.setText(str(int(sampleAveIncon))+'ms')
+        ui.popStroopShow.setText(str(int(sampleStroopScore)))
+
+        # Show boxplot of participant's results versus all
+        labels = ['Where do you stand?']
+        fig, ax = plt.subplots()
+        ax.boxplot(sampleStroopValues, labels=labels, showfliers=False)
+        ax.plot(1, stroopScore, marker='o')
+        plt.savefig('boxplot.png')
+        ui.resultsChart.setPixmap(QtGui.QPixmap("boxplot.png"))
+        ui.resultsChart.setScaledContents(True)
+        os.remove('boxplot.png')
+    else:
+        ui.popConShow.setText('N.A.')
+        ui.popInconShow.setText('N.A.')
+        ui.popStroopShow.setText('N.A.')
+        ui.resultsChart.hide()
+        ui.buffer.hide()
+
+def iniExp1():
+    if len(wd) == trialNum+1: # N+1 gives you the number of trials you want
+        exp1Complete()
+    elif len(keyPrs)==1:
+        showStroop()
+    else:
+        responseTime.append(window.counter)
+        keyPrs[-1]=keyPrs[-1].lower() #ensure that key pressed is in lower case
+
+        # Check if respondent entered correct keys
+        if keyPrs[-1] == 'r' or keyPrs[-1] == 'b' or keyPrs[-1] == 'g' or keyPrs[-1] == 'y':
+            if keyPrs[-1] == cl[-1][0]:
+                ui.error.setText("That's right!")
+                ui.error.show()
+                # Get speeds of con vs incon
+                if stCl[-1] == 'congruent':
+                    conSpeed.append(responseTime[-1])
+                else:
+                    inconSpeed.append(responseTime[-1])
+
+                # Save outputs into CSV
+                stroopList = [[wd[-1], cl[-1], stCl[-1], responseTime[-1]]]
+                with open(window.csvfile, "a") as output:
+                    writerDemog = csv.writer(output, lineterminator='\n')
+                    writerDemog.writerows(stroopList)
+                showStroop()
+            else:
+                ui.error.setText("Oops! Be more careful!")
+                ui.error.show()
+        else:
+            keyPrs[-1] = 'error'
+            ui.error.setText("ERROR: Please press either 'r', 'b', 'g' or 'y' key!")
+            ui.error.show()
+
+# Create keypress event
+expKeyPrs = KeyboardWidget(ui.exp1)
+expKeyPrs.setGeometry(10, 10, 10, 10)
+expKeyPrs.keyPressed.connect(keyPrs.append)
+expKeyPrs.keyPressed.connect(iniExp1)
+
+# Only call keypress event when on main experiment page
+def expSetUp():
+    goPg(4)
+    expKeyPrs.setFocus()
+
+# Next Buttons
+ui.wlcNext.clicked.connect(lambda: goPg(1))
+ui.consentBox.clicked.connect(lambda: goPg(2))
+ui.exitBox.clicked.connect(window.close)
+ui.demogSubmit.clicked.connect(checkErrors)
+ui.nxt1.clicked.connect(expSetUp)
+ui.resultsNxt.clicked.connect(lambda: goPg(6))
+ui.finishBtn.clicked.connect(window.close)
+
+# Hide Welcome message pre-animation
+for i in animateList:
+    i.hide()
+
+window.show()
+sys.exit(app.exec_())
