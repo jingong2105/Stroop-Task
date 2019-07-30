@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from Assessment3GUIv2 import *
+from StroopTaskGUIv2 import *
 from keyboardWidget import *
 from random import randint
 import csv
